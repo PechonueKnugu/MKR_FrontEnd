@@ -2,10 +2,10 @@ import Head from "next/head";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-export default function Home() {
-  const [inputValue, setInputValue] = useState("");
-  const [shortURL, setShortURL] = useState("");
+export default function History() {
   const [user, setUser] = useState(null);
+  const [urls, setUrls] = useState([]);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -19,47 +19,37 @@ export default function Home() {
         .then((response) => response.json())
         .then((data) => {
           setUser(data);
+          fetchUserUrls();
         });
+    }
+    else {
+      setErrorMessage("Log in to check history")
     }
   }, []);
 
-  const handleGenerate = async () => {
+  const fetchUserUrls = () => {
     const token = localStorage.getItem("authToken");
-    if (!token) {
-      setShortURL("Please log in to shorten URLs.");
-      return;
-    }
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/me/urls", {
-        method: "POST",
+    if (token) {
+      fetch("http://127.0.0.1:8000/api/me/urls", {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          url: inputValue,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setShortURL("http://127.0.0.1:8000/" + data.short);
-      } else {
-        setShortURL("Invalid URL");
-      }
-    } catch (error) {
-      setShortURL("Invalid URL");
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          setUrls(data);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
     }
   };
-  
+
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     setUser(null);
-  };
-
-  const handleInputChange = (event) => {
-    setInputValue(event.target.value);
+    setUrls([]);
   };
 
   return (
@@ -79,7 +69,7 @@ export default function Home() {
       </Head>
 
       <header>
-      <h1 id="logo">ShortURL</h1>
+        <h1 id="logo">ShortURL</h1>
         <article>
           {(() => {
           if (user) {
@@ -103,6 +93,7 @@ export default function Home() {
             }
           })()}
         </article>
+
       </header>
 
       <nav>
@@ -112,21 +103,15 @@ export default function Home() {
       </nav>
 
       <main id="main">
-        <p class="section_name">Enter the URL</p>
-        <input
-          type="text"
-          placeholder="Enter URL"
-          id="search"
-          value={inputValue}
-          onChange={handleInputChange}
-          autoComplete="off"
-        />
-        <button id="generate" onClick={handleGenerate}>Generate</button>
-        {shortURL && (
-          <a href={shortURL}>
-            {shortURL}
-          </a>
-        )}
+        <p class="section_name">History</p>
+        <ul>
+          <p>{errorMessage}</p>
+          {urls.map((url) => (
+            <li key={url.short}> 
+            <a href={`http://127.0.0.1:8000/${url.short}`}>{`http://127.0.0.1:8000/${url.short}`}</a> (<a href={url.url}>{url.url}</a>) 
+            </li>
+          ))}
+        </ul>
       </main>
     </>
   );

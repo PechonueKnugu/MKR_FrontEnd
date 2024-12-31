@@ -2,10 +2,10 @@ import Head from "next/head";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-export default function Home() {
-  const [inputValue, setInputValue] = useState("");
-  const [shortURL, setShortURL] = useState("");
+export default function Statistic() {
   const [user, setUser] = useState(null);
+  const [urls, setUrls] = useState([]);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -19,47 +19,46 @@ export default function Home() {
         .then((response) => response.json())
         .then((data) => {
           setUser(data);
+          fetchUserUrls(token);
         });
+    }
+    else {
+      setErrorMessage("Log in to check statistic")
     }
   }, []);
 
-  const handleGenerate = async () => {
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      setShortURL("Please log in to shorten URLs.");
-      return;
-    }
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/me/urls", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          url: inputValue,
-        }),
+  const fetchUserUrls = (token) => {
+    fetch("http://127.0.0.1:8000/api/me/urls", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        const urlPromises = data.map((url) =>
+          fetch(`http://127.0.0.1:8000/api/me/links/${url.short}/redirects`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+            .then((res) => res.json())
+            .then((redirects) => ({ ...url, redirects }))
+        );
+        Promise.all(urlPromises).then((urlsWithRedirects) => {
+          setUrls(urlsWithRedirects);
+        });
+      })
+      .catch((error) => {
+        console.error(error);
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setShortURL("http://127.0.0.1:8000/" + data.short);
-      } else {
-        setShortURL("Invalid URL");
-      }
-    } catch (error) {
-      setShortURL("Invalid URL");
-    }
   };
-  
+
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     setUser(null);
-  };
-
-  const handleInputChange = (event) => {
-    setInputValue(event.target.value);
+    setUrls([]);
   };
 
   return (
@@ -79,7 +78,7 @@ export default function Home() {
       </Head>
 
       <header>
-      <h1 id="logo">ShortURL</h1>
+        <h1 id="logo">ShortURL</h1>
         <article>
           {(() => {
           if (user) {
@@ -104,7 +103,6 @@ export default function Home() {
           })()}
         </article>
       </header>
-
       <nav>
         <a href="/history">History</a>
         <a href="/">Main Page</a>
@@ -112,21 +110,25 @@ export default function Home() {
       </nav>
 
       <main id="main">
-        <p class="section_name">Enter the URL</p>
-        <input
-          type="text"
-          placeholder="Enter URL"
-          id="search"
-          value={inputValue}
-          onChange={handleInputChange}
-          autoComplete="off"
-        />
-        <button id="generate" onClick={handleGenerate}>Generate</button>
-        {shortURL && (
-          <a href={shortURL}>
-            {shortURL}
-          </a>
-        )}
+        <p class="section_name">Statistic</p>
+        <ul>
+          <p>{errorMessage}</p>
+          {urls.map((url) => (
+            <li key={url.short}>
+              <p>
+                <a href={`http://127.0.0.1:8000/${url.short}`}>
+                  {`http://127.0.0.1:8000/${url.short}`}
+                </a>{" "}
+                (Original: <a href={url.url}>{url.url}</a>)
+              </p>
+              <ul>
+                {url.redirects.map((redirect, index) => (
+                  <li key={index}>{new Date(redirect).toLocaleString()}</li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
       </main>
     </>
   );
